@@ -15,17 +15,18 @@ from database import Database
 from parsers import OLXParser, AutoRiaParser
 from analyzer import analyze_listing, check_fraud_risk
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+# ⚡ Railway підставляє змінні автоматично — load_dotenv не потрібен
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+if not BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN не знайдено! Додай його в Railway → Variables")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
 db = Database()
 scheduler = AsyncIOScheduler()
 
