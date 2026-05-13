@@ -3,3 +3,5 @@ aiohttp==3.9.3
 beautifulsoup4==4.12.3
 APScheduler==3.10.4
 python-dotenv
+selenium
+webdriver-manager
