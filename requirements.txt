@@ -2,3 +2,4 @@ python-telegram-bot
 selenium
 webdriver-manager
 python-dotenv
+apscheduler
