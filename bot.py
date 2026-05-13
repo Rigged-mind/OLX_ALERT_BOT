@@ -28,7 +28,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 db = Database()
-scheduler = AsyncIOScheduler()
 
 
 # ─── КОМАНДИ ────────────────────────────────────────────────
@@ -306,6 +305,19 @@ def parse_alert_args(raw: str):
 
 # ─── ЗАПУСК ──────────────────────────────────────────────────
 
+async def setup_scheduler(app):
+    """Запускає планувальник всередині працюючого циклу подій (post_init)"""
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        check_all_alerts,
+        "interval",
+        minutes=5,
+        args=[app]
+    )
+    scheduler.start()
+    logger.info("⏰ Планувальник успішно запущено!")
+
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -317,14 +329,8 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    # Планувальник
-    scheduler.add_job(
-        check_all_alerts,
-        "interval",
-        minutes=5,
-        args=[app]
-    )
-    scheduler.start()
+    # Планувальник стартує після того, як бот підняв event loop
+    app.post_init = setup_scheduler
 
     logger.info("🤖 Бот запущено!")
     app.run_polling(drop_pending_updates=True)
