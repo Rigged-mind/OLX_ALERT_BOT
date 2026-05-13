@@ -48,14 +48,13 @@ OLX_CITIES = {
 def get_driver():
     """Створює headless Chrome драйвер для серверного парсингу."""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless=new")  # нова headless-архітектура Chrome 112+
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument(
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/119.0.0.0 Safari/537.36"
+        "Chrome/120.0.0.0 Safari/537.36"
     )
 
     service = Service(ChromeDriverManager().install())
@@ -87,13 +86,13 @@ class OLXParser:
     BASE_URL = "https://www.olx.ua"
 
     def build_url(self, query: str, city: str = None) -> str:
-        """Будує URL для пошуку на OLX"""
+        """Будує URL для пошуку на OLX (сортування — найновіші)"""
         q = query.replace(" ", "+")
         city_slug = OLX_CITIES.get(city, "") if city else ""
 
         if city_slug:
-            return f"{self.BASE_URL}/uk/{city_slug}/q-{q}/"
-        return f"{self.BASE_URL}/uk/list/q-{q}/"
+            return f"{self.BASE_URL}/uk/{city_slug}/q-{q}/?search[order]=created_at:desc"
+        return f"{self.BASE_URL}/uk/list/q-{q}/?search[order]=created_at:desc"
 
     async def fetch_listings(
         self,
@@ -159,8 +158,15 @@ class OLXParser:
         soup = BeautifulSoup(html, "html.parser")
         results = []
 
-        # OLX використовує data-cy="l-card" для карток
+        # Основний селектор OLX — data-cy="l-card"
         cards = soup.find_all("div", {"data-cy": "l-card"})
+
+        # Запасний селектор (нова верстка OLX)
+        if not cards:
+            logger.warning("OLX: data-cy='l-card' не знайдено, пробую запасний селектор")
+            cards = soup.select("a.css-z3gu2d")
+
+        logger.info(f"OLX: знайдено карток у HTML: {len(cards)}")
 
         for card in cards:
             try:
