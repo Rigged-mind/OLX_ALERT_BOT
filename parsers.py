@@ -11,6 +11,10 @@ from dataclasses import dataclass, field
 from typing import Optional
 import os
 from dotenv import load_dotenv
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -39,6 +43,24 @@ OLX_CITIES = {
     "Вінниця": "vinnitsa",
     "Полтава": "poltava",
 }
+
+
+def get_driver():
+    """Створює headless Chrome драйвер для серверного парсингу."""
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/119.0.0.0 Safari/537.36"
+    )
+
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    return driver
 
 
 @dataclass
@@ -98,11 +120,39 @@ class OLXParser:
                         return []
                     html = await resp.text()
 
-            return self._parse_html(html)
+            results = self._parse_html(html)
+            if results:
+                return results
+
+            logger.info("OLX HTML не містить карток, fallback на Selenium")
+            return await self._fetch_with_selenium(url)
 
         except Exception as e:
             logger.error(f"OLX помилка: {e}")
-            return []
+            try:
+                logger.info("OLX fallback на Selenium після помилки aiohttp")
+                return await self._fetch_with_selenium(url)
+            except Exception as selenium_error:
+                logger.error(f"OLX Selenium помилка: {selenium_error}")
+                return []
+
+    async def _fetch_with_selenium(self, url: str) -> list[dict]:
+        """Резервний парсинг OLX через Selenium для динамічних сторінок."""
+        def _parse_olx():
+            driver = get_driver()
+            try:
+                driver.get(url)
+                driver.implicitly_wait(10)
+
+                items = driver.find_elements("css selector", "[data-cy='l-card']")
+                logger.info(f"DEBUG: Знайдено елементів OLX через Selenium: {len(items)}")
+
+                html = driver.page_source
+                return self._parse_html(html)
+            finally:
+                driver.quit()
+
+        return await asyncio.to_thread(_parse_olx)
 
     def _parse_html(self, html: str) -> list[dict]:
         """Витягує оголошення з HTML"""
